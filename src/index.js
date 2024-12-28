@@ -89,7 +89,7 @@ pane.registerPlugin(TextareaPlugin);
 const aeroFolder = pane.addFolder({ title: 'Aerodynamics' });
 const geometryFolder = pane.addFolder({ title: 'Airfoil geometry', expanded: false });
 const airfoilRenderingFolder = pane.addFolder({ title: 'Airfoil rendering', expanded: false });
-const fieldRenderingFolder = pane.addFolder({ title: 'Pressure field rendering', expanded: true });
+const fieldRenderingFolder = pane.addFolder({ title: 'Pressure field rendering', expanded: false });
 
 const countBinding = geometryFolder.addBinding(PARAMS, 'count', {min: 3, max: 200, step: 1, label: 'panel count'});
 const mBinding = window.m = geometryFolder.addBinding(PARAMS, 'm', {min: -0.2, max: 0.2, label: 'camber (%)'});

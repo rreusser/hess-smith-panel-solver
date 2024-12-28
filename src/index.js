@@ -89,7 +89,7 @@ pane.registerPlugin(TextareaPlugin);
 const aeroFolder = pane.addFolder({ title: 'Aerodynamics' });
 const geometryFolder = pane.addFolder({ title: 'Airfoil geometry', expanded: false });
 const airfoilRenderingFolder = pane.addFolder({ title: 'Airfoil rendering', expanded: false });
-const fieldRenderingFolder = pane.addFolder({ title: 'Pressure field rendering', expanded: false });
+const fieldRenderingFolder = pane.addFolder({ title: 'Pressure field rendering', expanded: true });
 
 const countBinding = geometryFolder.addBinding(PARAMS, 'count', {min: 3, max: 200, step: 1, label: 'panel count'});
 const mBinding = window.m = geometryFolder.addBinding(PARAMS, 'm', {min: -0.2, max: 0.2, label: 'camber (%)'});
@@ -124,7 +124,10 @@ airfoilRenderingFolder.addBinding(PARAMS, 'lineWidth', {min: 0.5, max: 4, label:
 
 fieldRenderingFolder.addBinding(PARAMS, 'contourOpacity', {min: 0, max: 1, label: 'contour opacity'});
 fieldRenderingFolder.addBinding(PARAMS, 'shadingOpacity', {min: 0, max: 1, label: 'shading opacity'});
-const colorscaleBinding = fieldRenderingFolder.addBinding(PARAMS, 'colorscale', {options: Object.fromEntries(COLORSCALE_NAMES.map(c => [c, c]))});
+const colorscaleBinding = fieldRenderingFolder.addBinding(PARAMS, 'colorscale', {
+  options: Object.fromEntries(COLORSCALE_NAMES.map(c => [c, c])),
+  view: 'text'
+});
 const invertColorscaleBinding = fieldRenderingFolder.addBinding(PARAMS, 'invertColorscale', {label: 'invert'});
 
 

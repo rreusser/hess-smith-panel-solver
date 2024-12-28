@@ -95,6 +95,8 @@ export const TextareaPlugin = {
 			return null;
 		}
 
+    if (params.view !== 'textarea') return null;
+
 		const result = parseRecord(params, (p) => ({
 			view: p.required.constant('textarea'),
 			rows: p.optional.number,

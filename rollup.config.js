@@ -8,7 +8,7 @@ import { babel } from '@rollup/plugin-babel';
 export default [
   {
     input: 'src/index.js',
-    output: 'www/bundle.min.js',
+    output: 'docs/bundle.min.js',
     format: 'umd',
     name: 'VortexPanelSolver',
     //babelPresets: ['@babel/preset-env'],

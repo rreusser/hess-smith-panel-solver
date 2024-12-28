@@ -11,7 +11,7 @@ import solveVortexPanel from './vortex-panel-solver.js';
 import createCamera from './camera.js';
 import { Pane } from './tweakpane.min.js';
 import quantizeColorscale from './colorscale.js';
-import d3 from 'd3/dist/d3';
+import d3 from 'd3/dist/d3.min.js';
 import createGeometry from './airfoil.js';
 import RenderData from './render-data.js';
 import StreamlineField from './streamline-field.js';

@@ -1,4 +1,4 @@
-const d3 = require('d3/dist/d3');
+import d3 from 'd3/dist/d3.min.js';
 
 function createZoom (scales, onZoom) {
   const xOriginal = scales.x.copy();
@@ -17,7 +17,7 @@ function createZoom (scales, onZoom) {
   });
 }
 
-module.exports = function attachPanZoom(el, scales, onZoom) {
+export default function attachPanZoom(el, scales, onZoom) {
   const xRange = scales.x.range();
   const yRange = scales.y.range();
   const aspect = (xRange[1] - xRange[0]) / (yRange[0] - yRange[1]);

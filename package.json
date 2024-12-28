@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "budo --open --live --host localhost index.js -- -t [ babelify --presets [ @babel/preset-env ] ]",
+    "start": "budo --open --live --host localhost index.js:bundle.min.js --dir www -- -t [ babelify --presets [ @babel/preset-env ] ]",
     "build": "rollup -c rollup.config.js"
   },
   "keywords": [],

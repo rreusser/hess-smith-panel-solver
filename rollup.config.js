@@ -19,11 +19,19 @@ export default [
     file: bundle.output,
     format: bundle.format,
     name: bundle.name,
+    globals: {
+      'd3/dist/d3.min.js': 'd3',
+      'earcut/dist/earcut.min.js': 'earcut.default',
+    }
   },
+  external: [
+    'd3/dist/d3.min.js',
+    'earcut/dist/earcut.min.js'
+  ],
   plugins: [
+    commonjs(),
     nodePolyfills(),
     nodeResolve({ browser: true }),
-    commonjs(),
     //babel({
       //babelHelpers: 'bundled',
       //presets: bundle.babelPresets

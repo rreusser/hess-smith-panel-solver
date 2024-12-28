@@ -85,8 +85,9 @@ const pane = new Pane();
 
 pane.registerPlugin(TextareaPlugin);
 
+//const infoFolder = pane.addFolder({ title: 'About', expanded: true });
 const aeroFolder = pane.addFolder({ title: 'Aerodynamics' });
-const geometryFolder = pane.addFolder({ title: 'Airfoil geometry', expanded: true });
+const geometryFolder = pane.addFolder({ title: 'Airfoil geometry', expanded: false });
 const airfoilRenderingFolder = pane.addFolder({ title: 'Airfoil rendering', expanded: false });
 const fieldRenderingFolder = pane.addFolder({ title: 'Pressure field rendering', expanded: false });
 

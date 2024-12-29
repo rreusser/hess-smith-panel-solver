@@ -1,14 +1,15 @@
 import createREGL from 'regl';
 import createZoom from './create-zoom.js';
 import createDrawLines from './draw-lines.js';
+import createDrawStreamlines from './draw-streamlines.js';
 import createDrawPoints from './draw-points.js';
 import createDrawField from './draw-field.js';
 import createDrawSolidGeometry from './draw-solid-airfoil.js';
 import createConfigureViewport from './configure-viewport.js';
 import createConfigureLinearScales from './configure-linear-scales.js';
-import evaluate from './evaluate.js';
+import createEvaluator from './evaluate.js';
+import { transformMat4 as vec3transformMat4 } from 'gl-vec3';
 import solveVortexPanel from './vortex-panel-solver.js';
-import createCamera from './camera.js';
 import { Pane } from './tweakpane.min.js';
 import quantizeColorscale from './colorscale.js';
 import d3 from 'd3/dist/d3.min.js';
@@ -18,6 +19,7 @@ import StreamlineField from './streamline-field.js';
 import throttle from './throttle.js';
 import * as TextareaPlugin from './textarea-plugin/index.js';
 import serializeGeometry from './serialize-geometry.js';
+import createDrawLiveStreamlines from './live-streamlines.js';
 
 const COLORSCALE_NAMES = [
   'Cividis', 'Viridis', 'Inferno', 'Magma', 'Plasma', 'Warm', 'Cool', 'CubehelixDefault', 'Turbo',
@@ -42,11 +44,16 @@ const regl = createREGL({
   pixelRatio
 });
 
+const vInf = 1;
+
+const MAX_STREAMLINE_COUNT = 5000;
+const MAX_STREAMLINE_LENGTH = 40;
+
 const PARAMS = window.PARAMS = {
   points: '{\n"foo": "bar"\n}',
   count: 40,
-  closeEnd: false,
-  alpha: 6,
+  closeEnd: true,
+  alpha: 7,
   kuttaCondition: true,
   clustering: true,
   m: 0.04,
@@ -62,6 +69,12 @@ const PARAMS = window.PARAMS = {
   shadingOpacity: 0.15,
   colorscale: 'Magma',
   invertColorscale: false,
+  streamlineOpacity: 0.2,
+  streamlineWidth: 2,
+  streamlineCount: 500,
+  streamlineNoise: 0.2,
+  streamlineColorByPressure: 0.0,
+  streamlineLength: 20,
 };
 
 const colorscale = regl.texture({
@@ -78,6 +91,9 @@ const scales = {
   y: d3.scaleLinear().domain([-1, 1])
 };
 
+const mouseVecData = new Float32Array([-1000, -1000, 0, 0, 0, 0, -1000, -1000]);
+const mouseVecBuffer = regl.buffer(mouseVecData);
+
 const renderData = new RenderData({regl, count: PARAMS.count});
 
 window.Pane = Pane;
@@ -87,9 +103,10 @@ pane.registerPlugin(TextareaPlugin);
 
 //const infoFolder = pane.addFolder({ title: 'About', expanded: true });
 const aeroFolder = pane.addFolder({ title: 'Aerodynamics' });
-const geometryFolder = pane.addFolder({ title: 'Airfoil geometry', expanded: false });
+const geometryFolder = pane.addFolder({ title: 'Geometry', expanded: false });
 const airfoilRenderingFolder = pane.addFolder({ title: 'Airfoil rendering', expanded: false });
-const fieldRenderingFolder = pane.addFolder({ title: 'Pressure field rendering', expanded: false });
+const fieldRenderingFolder = pane.addFolder({ title: 'Pressure field', expanded: false });
+const streamlineFolder = pane.addFolder({ title: 'Streamlines', expanded: false });
 
 const countBinding = geometryFolder.addBinding(PARAMS, 'count', {min: 3, max: 200, step: 1, label: 'panel count'});
 const mBinding = window.m = geometryFolder.addBinding(PARAMS, 'm', {min: -0.2, max: 0.2, label: 'camber (%)'});
@@ -98,7 +115,7 @@ const tBinding = geometryFolder.addBinding(PARAMS, 't', {min: 0.001, max: 0.5, l
 const clusteringBinding = geometryFolder.addBinding(PARAMS, 'clustering');
 const closeBinding = geometryFolder.addBinding(PARAMS, 'closeEnd', {label: 'close end'});
 const pointsBinding = window.pb = geometryFolder.addBinding(PARAMS, 'points', {
-  label: 'custom points\n(enter x, y pairs, shift + enter to update)',
+  label: 'custom geometry\n(shift + enter to update)',
   placeholder: 'CSV x,y coords',
   view: 'textarea',
   multiline: true,
@@ -109,10 +126,11 @@ const alphaBinding = aeroFolder.addBinding(PARAMS, 'alpha', {min: -20, max: 20, 
 aeroFolder.addBinding(PARAMS, 'kuttaCondition', {label: 'kutta condition'});
 
 const drawLines = createDrawLines(regl);
+const drawStreamlines = createDrawStreamlines(regl);
 const drawPoints = createDrawPoints(regl);
 const drawField = createDrawField(regl);
 const drawSolidGeometry = createDrawSolidGeometry(regl);
-const camera = createCamera(regl);
+const drawLiveStreamlines = createDrawLiveStreamlines(regl, {maxStreamlines: MAX_STREAMLINE_COUNT, maxLength: MAX_STREAMLINE_LENGTH});
 const configureViewport = createConfigureViewport(regl);
 const configureLinearScales = createConfigureLinearScales(regl);
 
@@ -130,26 +148,43 @@ const colorscaleBinding = fieldRenderingFolder.addBinding(PARAMS, 'colorscale', 
 });
 const invertColorscaleBinding = fieldRenderingFolder.addBinding(PARAMS, 'invertColorscale', {label: 'invert'});
 
+streamlineFolder.addBinding(PARAMS, 'streamlineCount', {min: 0, max: MAX_STREAMLINE_COUNT, label: 'count', step: 1});
+streamlineFolder.addBinding(PARAMS, 'streamlineOpacity', {min: 0, max: 1, label: 'opacity'});
+streamlineFolder.addBinding(PARAMS, 'streamlineNoise', {min: 0, max: 1, label: 'noise'});
+streamlineFolder.addBinding(PARAMS, 'streamlineColorByPressure', {min: 0, max: 1, label: 'color by pressure'});
+streamlineFolder.addBinding(PARAMS, 'streamlineWidth', {min: 1.0, max: 8, label: 'line width'});
+streamlineFolder.addBinding(PARAMS, 'streamlineLength', {min: 3, max: MAX_STREAMLINE_LENGTH, label: 'line length', step: 1});
+
+/*
+const integrateStreamlines = throttle(function integrateStreamlines () {
+  streamlines.updateSeeds({geometry, matrices})
+  streamlines.integrate(evaluate, Math.hypot(matrices.view[0], matrices.view[5]));
+  requestAnimationFrame(draw);
+}, 1000);
+*/
 
 let customGeometry = null;
-let geometry;
+let geometry, solution, evaluate;
 function update () {
   if (customGeometry) {
     geometry = customGeometry;
   } else {
     geometry = createGeometry(PARAMS);
   }
-
   renderData.updateGeometry(geometry);
-  const solution = solveVortexPanel({ geometry, vInf: 1, ...PARAMS });
+  solution = solveVortexPanel({ geometry, vInf, ...PARAMS });
   renderData.updateSolution(geometry, solution);
 
-  PARAMS.points = serializeGeometry(geometry);
+  evaluate = createEvaluator({geometry, solution, vInf, ...PARAMS});
 
+  matrices = configureLinearScales({scales, ...PARAMS});
+  //integrateStreamlines();
+
+  PARAMS.points = serializeGeometry(geometry);
   requestAnimationFrame(() => pane.refresh());
 }
 
-const streamlines = new StreamlineField({regl});
+//const streamlines = new StreamlineField({regl});
 
 function draw () {
   regl.poll();
@@ -158,19 +193,43 @@ function draw () {
       drawField({
         ...PARAMS,
         ...renderData,
-        vInf: [Math.cos(PARAMS.alpha * Math.PI / 180), Math.sin(PARAMS.alpha * Math.PI / 180)],
+        vInf: [
+          vInf * Math.cos(PARAMS.alpha * Math.PI / 180),
+          vInf * Math.sin(PARAMS.alpha * Math.PI / 180)
+        ],
         colorscale,
       });
+
+      /*drawStreamlines({
+        vertexAttributes: {
+          xy: streamlines.trajectoriesBuffer
+        },
+        vertexCount: streamlines.renderCount, 
+        lineWidth: PARAMS.streamlineWidth,
+        color: [1, 1, 1, PARAMS.streamlineOpacity],
+        join: 'bevel',
+        caps: 'none',
+      });
+      */
       
-      if (false) {
-        drawPoints({
-          vertexBuffer: streamlines.seedBuffer,
-          count: streamlines.seeds.length / 2,
-          color: [1, 1, 1, 1],
-          pointSize: 2
+      if (PARAMS.streamlineCount && PARAMS.streamlineOpacity > 0.01) {
+        drawLiveStreamlines({
+          ...renderData,
+          noise: PARAMS.streamlineNoise,
+          count: PARAMS.streamlineCount,
+          byPressure: PARAMS.streamlineColorByPressure,
+          panelCount: PARAMS.count,
+          lineWidth: PARAMS.streamlineWidth,
+          color: [1, 1, 1, PARAMS.streamlineOpacity],
+          dt: 0.1 / Math.hypot(matrices.view[0], matrices.view[5]),
+          vInf: [
+            vInf * Math.cos(PARAMS.alpha * Math.PI / 180),
+            vInf * Math.sin(PARAMS.alpha * Math.PI / 180)
+          ],
+          length: PARAMS.streamlineLength,
+          colorscale,
         });
       }
-
       if (PARAMS.fillOpacity) {
         drawSolidGeometry({
           ...renderData,
@@ -200,6 +259,7 @@ function draw () {
           color: [1, 1, 1, PARAMS.vertexOpacity]
         });
       }
+
 
     });
   });
@@ -240,13 +300,12 @@ pointsBinding.on('change', ({value}) => {
   }
 });
 
-[geometryFolder, aeroFolder].forEach(binding => binding.on('change', update));
-[geometryFolder, aeroFolder, airfoilRenderingFolder, fieldRenderingFolder].forEach(binding => binding.on('change', draw))
-alphaBinding.on('change', onResize);
-
+let matrices = configureLinearScales({scales, ...PARAMS});
 update();
 
-let matrices = {};
+[geometryFolder, aeroFolder].forEach(binding => binding.on('change', update));
+[geometryFolder, aeroFolder, airfoilRenderingFolder, fieldRenderingFolder, streamlineFolder].forEach(binding => binding.on('change', draw))
+alphaBinding.on('change', onResize);
 
 [closeBinding, mBinding, pBinding, tBinding, countBinding, clusteringBinding].forEach(binding =>
   binding.on('change', () => {
@@ -254,24 +313,39 @@ let matrices = {};
   })
 );
 
-const seedStreamlines = throttle((matrices) => {
-  streamlines.updateSeeds({matrices})
-  requestAnimationFrame(draw);
-}, 500);
-
 function onResize () {
   scales.x.range([0, canvas.width / pixelRatio]);
   scales.y.range([canvas.height / pixelRatio, 0]);
-  createZoom(canvas, scales, function () {
+  function onZoom () {
     matrices = configureLinearScales({scales, ...PARAMS});
-    seedStreamlines(matrices);
+    //integrateStreamlines();
     requestAnimationFrame(draw);
-  });
+  }
+  createZoom(canvas, scales, onZoom);
 }
 onResize();
 window.addEventListener('resize', onResize);
 
+/*
 canvas.addEventListener('mousemove', (event) => {
   const {clientX, clientY} = event;
-  //console.log(clientX, clientY);
+
+  const p = [
+    (clientX / window.innerWidth) * 2 - 1,
+    1 - (clientY / window.innerHeight) * 2,
+    0, 1
+  ];
+  vec3transformMat4(p, p, matrices.inverseView);
+
+  const v = evaluate(p);
+
+  mouseVecData[2] = p[0];
+  mouseVecData[3] = p[1];
+  mouseVecData[4] = p[0] + v[0] * 0.2;
+  mouseVecData[5] = p[1] + v[1] * 0.2;
+
+  mouseVecBuffer.subdata(mouseVecData);
+
+  draw();
 });
+*/

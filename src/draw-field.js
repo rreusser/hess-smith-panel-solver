@@ -4,35 +4,59 @@ export default function (regl) {
     precision highp float;
     attribute vec2 coord;
     uniform mat4 inverseView;
-    varying vec2 xy;
+    varying vec2 xy, uv;
     void main () {
-      vec4 uv = vec4(coord, 0, 1);
-      xy = (inverseView * uv).xy;
-      gl_Position = uv;
+      vec4 p = vec4(coord, 0, 1);
+      xy = (inverseView * p).xy;
+      gl_Position = p;
+      uv = coord;
     }`,
     frag: (_, {count}) => `
     #extension GL_OES_standard_derivatives : enable
     precision highp float;
-    varying vec2 xy;
+    varying vec2 xy, uv;
     uniform sampler2D panelData, colorscale;
     uniform vec2 vInf;
     uniform float contourOpacity, shadingOpacity;
 
     const float pi = ${Math.PI};
 
-    float grid (float parameter, float width, float feather) {
-      float w1 = width - feather * 0.5;
-      float d = fwidth(parameter);
-      return smoothstep(d * (w1 + feather), d * w1, 0.5 - abs(mod(parameter, 1.0) - 0.5));
-    }
+    // Source: https://github.com/hughsk/glsl-noise/blob/master/simplex/2d.glsl
+    //
+    // Description : Array and textureless GLSL 2D simplex noise function.
+    //      Author : Ian McEwan, Ashima Arts.
+    //  Maintainer : ijm
+    //     Lastmod : 20110822 (ijm)
+    //     License : Copyright (C) 2011 Ashima Arts. All rights reserved.
+    //               Distributed under the MIT License. See LICENSE file.
+    //               https://github.com/ashima/webgl-noise
+    //
 
-    float hypot (vec2 z) {
-      float x = abs(z.x);
-      float y = abs(z.y);
-      float t = min(x, y);
-      x = max(x, y);
-      t = t / x;
-      return x * sqrt(1.0 + t * t);
+    vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+    vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+    vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
+    float snoise(vec2 v) {
+      const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+      vec2 i  = floor(v + dot(v, C.yy) );
+      vec2 x0 = v - i + dot(i, C.xx);
+      vec2 i1;
+      i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+      vec4 x12 = x0.xyxy + C.xxzz;
+      x12.xy -= i1;
+      i = mod289(i);
+      vec3 p = permute( permute(i.y + vec3(0.0, i1.y, 1.0 )) + i.x + vec3(0.0, i1.x, 1.0));
+      vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+      m = m*m;
+      m = m*m;
+      vec3 x = 2.0 * fract(p * C.www) - 1.0;
+      vec3 h = abs(x) - 0.5;
+      vec3 ox = floor(x + 0.5);
+      vec3 a0 = x - ox;
+      m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+      vec3 g;
+      g.x  = a0.x * x0.x + h.x * x0.y;
+      g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+      return 130.0 * dot(m, g);
     }
 
     float linearstep(float edge0, float edge1, float x) {
@@ -81,9 +105,7 @@ export default function (regl) {
       for (int i = 1; i < ${count + 1}; i++) {
         vec4 next = texture2D(panelData, vec2((float(i) + 0.5) / float(${count + 1}), 0.5));
         vec2 rNext = xy - next.xy;
-        vec2 t = next.xy - prev.xy;
-        float l = length(t);
-        t /= l;
+        vec2 t = normalize(next.xy - prev.xy);
         vec2 n = vec2(-t.y, t.x);
         float bij = atan(rPrev.x * rNext.y - rNext.x * rPrev.y, dot(rPrev, rNext));
         float lograt = 0.5 * log(dot(rNext, rNext) / dot(rPrev, rPrev));

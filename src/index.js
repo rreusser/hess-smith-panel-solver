@@ -20,6 +20,7 @@ import throttle from './throttle.js';
 import * as TextareaPlugin from './textarea-plugin/index.js';
 import serializeGeometry from './serialize-geometry.js';
 import createDrawLiveStreamlines from './live-streamlines.js';
+import computeLift from './compute-lift.js';
 
 const COLORSCALE_NAMES = [
   'Cividis', 'Viridis', 'Inferno', 'Magma', 'Plasma', 'Warm', 'Cool', 'CubehelixDefault', 'Turbo',
@@ -75,6 +76,7 @@ const PARAMS = window.PARAMS = {
   streamlineNoise: 0.2,
   streamlineColorByPressure: 0.0,
   streamlineLength: 20,
+  liftDisplay: '',
 };
 
 const colorscale = regl.texture({
@@ -123,7 +125,8 @@ const pointsBinding = window.pb = geometryFolder.addBinding(PARAMS, 'points', {
 });
 
 const alphaBinding = aeroFolder.addBinding(PARAMS, 'alpha', {min: -20, max: 20, step: 0.05, label: 'angle of attack'});
-aeroFolder.addBinding(PARAMS, 'kuttaCondition', {label: 'kutta condition'});
+const kuttaBinding = aeroFolder.addBinding(PARAMS, 'kuttaCondition', {label: 'kutta condition'});
+const liftBinding = window.lb= aeroFolder.addBinding(PARAMS, 'liftDisplay', {label: 'lift coeff, cL'});
 
 const drawLines = createDrawLines(regl);
 const drawStreamlines = createDrawStreamlines(regl);
@@ -173,10 +176,10 @@ function update () {
   }
   renderData.updateGeometry(geometry);
   solution = solveVortexPanel({ geometry, vInf, ...PARAMS });
+  liftBinding.controller.value.setRawValue(computeLift({ geometry, vInf, solution }).toFixed(5));
   renderData.updateSolution(geometry, solution);
 
   evaluate = createEvaluator({geometry, solution, vInf, ...PARAMS});
-
   matrices = configureLinearScales({scales, ...PARAMS});
   //integrateStreamlines();
 
@@ -303,8 +306,8 @@ pointsBinding.on('change', ({value}) => {
 let matrices = configureLinearScales({scales, ...PARAMS});
 update();
 
-[geometryFolder, aeroFolder].forEach(binding => binding.on('change', update));
-[geometryFolder, aeroFolder, airfoilRenderingFolder, fieldRenderingFolder, streamlineFolder].forEach(binding => binding.on('change', draw))
+[geometryFolder, alphaBinding, kuttaBinding].forEach(binding => binding.on('change', update));
+[geometryFolder, alphaBinding, kuttaBinding, airfoilRenderingFolder, fieldRenderingFolder, streamlineFolder].forEach(binding => binding.on('change', draw))
 alphaBinding.on('change', onResize);
 
 [closeBinding, mBinding, pBinding, tBinding, countBinding, clusteringBinding].forEach(binding =>
@@ -349,3 +352,9 @@ canvas.addEventListener('mousemove', (event) => {
   draw();
 });
 */
+
+/*function updateAlpha () {
+  alphaBinding.controller.value.setRawValue(Math.sin(performance.now() / 1000) * 20);
+  requestAnimationFrame(updateAlpha);
+}
+requestAnimationFrame(updateAlpha);*/

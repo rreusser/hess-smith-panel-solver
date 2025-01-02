@@ -72,7 +72,7 @@ export default class RenderData {
       this.panelData = this.regl.texture({
         width: n + 1,
         height: 1,
-        data: data,
+        data,
         min: 'nearest',
         mag: 'nearest',
         wrapS: 'clamp',

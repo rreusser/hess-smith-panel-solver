@@ -129,7 +129,7 @@ const kuttaBinding = aeroFolder.addBinding(PARAMS, 'kuttaCondition', {label: 'ku
 const liftBinding = window.lb= aeroFolder.addBinding(PARAMS, 'liftDisplay', {label: 'lift coeff, cL'});
 
 const drawLines = createDrawLines(regl);
-const drawStreamlines = createDrawStreamlines(regl);
+//const drawStreamlines = createDrawStreamlines(regl);
 const drawPoints = createDrawPoints(regl);
 const drawField = createDrawField(regl);
 const drawSolidGeometry = createDrawSolidGeometry(regl);
@@ -221,7 +221,7 @@ function draw () {
           noise: PARAMS.streamlineNoise,
           count: PARAMS.streamlineCount,
           byPressure: PARAMS.streamlineColorByPressure,
-          panelCount: PARAMS.count,
+          panelCount: geometry.x.length - 1,
           lineWidth: PARAMS.streamlineWidth,
           color: [1, 1, 1, PARAMS.streamlineOpacity],
           dt: 0.1 / Math.hypot(matrices.view[0], matrices.view[5]),
